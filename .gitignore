@@ -1,3 +1,7 @@
+# My ignores
+
+toy_example.r
+
 # Created by https://www.toptal.com/developers/gitignore/api/macos,sublimetext,r,python
 # Edit at https://www.toptal.com/developers/gitignore?templates=macos,sublimetext,r,python
 
@@ -8,7 +12,8 @@
 .LSOverride
 
 # Icon must end with two \r
-Icon
+Icon
+
 
 # Thumbnails
 ._*
