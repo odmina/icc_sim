@@ -1,6 +1,7 @@
 # My ignores
 
 toy_example.r
+*.Rproj
 
 # Created by https://www.toptal.com/developers/gitignore/api/macos,sublimetext,r,python
 # Edit at https://www.toptal.com/developers/gitignore?templates=macos,sublimetext,r,python
