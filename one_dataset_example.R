@@ -14,7 +14,7 @@
 #   - predictior that fluctuates over time;
 #   - siucide risk changes that are dependent on the predictior.
 # I intent do show that sampling from one point of such ground truth data leads to
-#   gross effect underestimation and this underestimation increases with assumed hazard period lenght.
+#   gross effect underestimation and this underestimation increases with smaller ICCs.
 
 # %% LIBRARIES
 library(dplyr)
@@ -25,14 +25,14 @@ library(pROC)
 # %% TIME VECTOR
 # I am using one day data resolution for ground truth simulation.
 # Then I am going to use week, month and year hazard periods and varying timeframes for risk change.
-n_days <- 2*365 #two years
+n_days <- 2*365 #two months
 tv_days <- seq.int(1, n_days, 1)
 
 # %% SIMULATION NUMBER OF OBSERVATIONS
 N <- 20000
 population <- data.table(id = seq.int(1, N, 1))
 
-# %% FUNCTION THAT DECOMPOSES TOTAL VARIANCE TO TRUE SCORE VARIANCE AND BY ICC
+# %% FUNCTION THAT DECOMPOSES TOTAL VARIANCE TO TRUE SCORE VARIANCE AND TIME FLUCTUATIONS BY ICC
 # Calculation based on Model 1 form 
 #    Liljequist, D., Elfving, B., & Skavberg Roaldsen, K. (2019). 
 #       Intraclass correlation – A discussion and demonstration of basic features. 
@@ -42,6 +42,7 @@ population <- data.table(id = seq.int(1, N, 1))
 #   var_v is the variance of scores whitin subjects
 # Returns a list with var_r and var_v
 get_disp_from_ICC <- function(sd_total = 1, ICC = 0.5) {
+    var_total = sd_total ^ 2
     var_r = var_total * ICC
     var_v = var_r * (1 - ICC) / ICC
     return(list(var_r = var_r, 
@@ -56,8 +57,8 @@ get_disp_from_ICC <- function(sd_total = 1, ICC = 0.5) {
 # pred_ICC represents intraclass corelation (ICC).
 # pred_var_total represents total variance of the predictior
 pred_ICC <- 0.5
-pred_var_total <- 1
-pred_vars <- get_var_from_ICC(pred_var_total, pred_ICC)
+pred_sd_total <- 1
+pred_vars <- get_disp_from_ICC(pred_sd_total, pred_ICC)
 pred_sd_r <- sqrt(pred_vars$var_r)
 pred_sd_v <- sqrt(pred_vars$var_v)
 
@@ -67,8 +68,8 @@ pred_sd_v <- sqrt(pred_vars$var_v)
 # Daily random risk fluctuations are error term for daily measurements.
 # To account for their relative relevance ICC is also used.
 noise_ICC <- 0.5
-noise_var_total <- 1
-noise_vars <- get_var_from_ICC(noise_var_total, noise_ICC)
+noise_sd_total <- 1
+noise_vars <- get_disp_from_ICC(noise_sd_total, noise_ICC)
 noise_sd_r <- sqrt(noise_vars$var_r)
 noise_sd_v <- sqrt(noise_vars$var_v)
 
@@ -84,15 +85,20 @@ pop_days$predictor <- pop_days$pred_r + rnorm(n = n_days * N, sd = pred_sd_v, me
 pop_days$noise <- pop_days$noise_r + rnorm(n = n_days * N, sd = noise_sd_v, mean = 0)
 
 # %% FINAL SA RISK CALCULATION
+# variance_scaling allows to control to what extent dependent variable variace is explained
+#   by the variance of predictor
+#   noise variance is kept constant at 1
 variance_scaling = 0.2
 pop_days$sa_risk <- variance_scaling * pop_days$predictor + pop_days$noise
 
 # %% BINARY OUTCOME
+# uses cutoff score that is based on daily SA incidence
 SA_incidence_day <- 0.0014
 cutoff <- quantile(pop_days$sa_risk, probs = 1 - SA_incidence_day)
 pop_days$sa <- ifelse(pop_days$sa_risk > cutoff, 1, 0)
 
 # %% SAMPLE
+# draw sample of size n from the simulated population of size N
 sample_n <- 200
 sample_ids <- sample(1:N, size = sample_n, replace = FALSE)
 sample_days <- pop_days[id %in% sample_ids]
@@ -112,7 +118,8 @@ sample_days %>%
 # %% Mixed model reflecting ground truth - sample
 m_lme <- glmer(sa ~ predictor + (1|id), data = sample_days, family = "binomial")
 
-# %% get ROC curve - on the remainder of the dataset
+
+# %% get ROC curve - on the reminder of the dataset
 #   i.e. obsevations that are not included in the sample used for model fit
 # first make predictions based on variable predictor
 # do not include intercepts (it is achieved by re.form = ~0)
@@ -122,14 +129,14 @@ pred_days$m_lme_pred <- predict(m_lme,
     re.form = ~0, 
     type = "response")
 print("BASE")
-(my_roc <- roc(response = pred_days$sa, predictor = pred_days$m_lme_pred))
+(my_roc <- roc(response = pred_days$sa, predictor = pred_days$m_lme_pred, ret=c("specifity", "ppv")))
 
 # %% Simple model with one measurement and follow-up 
-# I start with sampling one day and then check whether a SA occured during follow-up
+# I start with measuring one day and then check whether a SA occured during follow-up
 # day 365 - measurement, next days - followup
 # 1. get predictor level
 predictor <- pop_days[pop_days$day == 365, c("id", "predictor")]
-# 2. get info on SA during followup
+# 2. get info on SA (sa == 1) during followup (day > 365)
 sa_followup <- pop_days[ ,  
     .(sa = any(sa == 1 & day > 365)), 
     by = id]
@@ -143,4 +150,55 @@ d1_pred$y_hat <- predict(m_d1, newdata = d1_pred, type = "response")
 print("MODEL")
 (my_roc_d1 <- roc(response = d1_pred$sa, predictor = d1_pred$y_hat))
 
+# %% Siple model with averaging pred level over a week before measurement
+# 1. get predictor level
+predictor <- pop_days[pop_days$day %in% c(359:365), c("id", "predictor")]
+predictor <- predictor[ , .(predictor = mean(predictor)), by="id"]
+# 2. get info on SA (sa == 1) during followup (day > 365)
+sa_followup <- pop_days[ ,  
+    .(sa = any(sa == 1 & day > 365)), 
+    by = id]
+# 3. join predictor with info about SA
+d1 <- predictor[sa_followup, on = .(id)]
+d1_sample <- d1[id %in% sample_ids]
+d1_pred <- d1[!(id %in% sample_ids)]
+# 4. model
+m_d1 <- glm(sa ~ predictor, data = d1_sample, family = "binomial")
+d1_pred$y_hat <- predict(m_d1, newdata = d1_pred, type = "response")
+print("MODEL")
+(my_roc_d1 <- roc(response = d1_pred$sa, predictor = d1_pred$y_hat))
+
+# %% Model with NO averaging pred level one week observation
+# 1. get predictor level in sample
+predictor <- pop_days[day %in% c(359:365), c("id", "predictor", "sa")]
+# 2. sample and test data
+d_sample <- predictor[id %in% sample_ids]
+d_pred <- pop_days[!(id %in% sample_ids)]
+d_pred <- d_pred[day > 365]
+# 4. model
+m_d1 <- glmer(sa ~ predictor + (1|id), data = d_sample, family = "binomial")
+d_pred$y_hat <- predict(m_d1, 
+    newdata = d_pred, 
+    re.form = ~0, 
+    type = "response")
+print("MODEL")
+(my_roc_d1 <- roc(response = d_pred$sa, predictor = d_pred$y_hat))
+
+# %% Siple model with averaging pred level over a year before measurement
+# 1. get predictor level
+predictor <- pop_days[pop_days$day %in% c(1:365), c("id", "predictor")]
+predictor <- predictor[ , .(predictor = mean(predictor)), by="id"]
+# 2. get info on SA (sa == 1) during followup (day > 365)
+sa_followup <- pop_days[ ,  
+    .(sa = any(sa == 1 & day > 365)), 
+    by = id]
+# 3. join predictor with info about SA
+d1 <- predictor[sa_followup, on = .(id)]
+d1_sample <- d1[id %in% sample_ids]
+d1_pred <- d1[!(id %in% sample_ids)]
+# 4. model
+m_d1 <- glm(sa ~ predictor, data = d1_sample, family = "binomial")
+d1_pred$y_hat <- predict(m_d1, newdata = d1_pred, type = "response")
+print("MODEL")
+(my_roc_d1 <- roc(response = d1_pred$sa, predictor = d1_pred$y_hat))
 
