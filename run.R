@@ -57,11 +57,11 @@ clusterEvalQ(cl, {
 runs <- 100
 for (i in seq_len(runs)) {
     sim_results <- clusterMap(cl, sim_data,
-        N = mini_params[["N"]],
-        sample_size = mini_params[["sample_sizes"]],
-        pred_ICC = mini_params[["pred_ICCs"]],
-        gtm_beta = mini_params[["gtm_betas"]],
-        SA_incidence_day = mini_params[["SA_incidences_days"]],    
+        N = params[["N"]],
+        sample_size = params[["sample_sizes"]],
+        pred_ICC = params[["pred_ICCs"]],
+        gtm_beta = params[["gtm_betas"]],
+        SA_incidence_day = params[["SA_incidences_days"]],    
         RECYCLE = FALSE,
         SIMPLIFY = FALSE, 
         USE.NAMES = TRUE)
