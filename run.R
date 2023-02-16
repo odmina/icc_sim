@@ -1,6 +1,8 @@
 # %% LIBRARIES
 library(parallel)
 
+source("fun/sim_data.R")
+
 # %% CREATE A DIRECTORY TO STORE SIMULATION RESULTS
 dir_name <- paste0("sim_results_", Sys.Date(), "_", format(Sys.time(), "%H%M%S"))
 dir.create(dir_name)
@@ -9,7 +11,7 @@ dir.create(dir_name)
 N <- 20000
 sample_sizes <- c(100, 200, 500, 1000)
 pred_ICCs <- c(0.3, 0.5, 0.7)
-noise_ICCs <- c(0.5)
+noise_ICCs <- c(0.3, 0.5, 0.7)
 gtm_betas <- c(0.2, 0.3, 0.4, 0.5)
 SA_incidences_days <- 0.01
 
@@ -27,52 +29,44 @@ names(params) <- c("N",
     "gtm_betas",
     "SA_incidences_days")
 
-# %% DETECT CORES
+# %% SET UP CLUSTER
 n_cores <- detectCores()
-
-# %% HOW MANY TIMES REPEAT EACH COMBINATION OF PARAMS?
-runs <- 3
-
-# %% RUN PARALLELIZED in a loop
-for (i in seq_len(runs)) {
-    # set cluster
-    cl <- makeCluster(n_cores)
-    # load libraries to workers
-    clusterEvalQ(cl, {
-            library(dplyr)
-            library(data.table)
-            library(lme4)
-            library(pROC)
-            })
-    # set working dir for each worker
-    clusterExport(cl, "wd")
-    wd <- getwd()
-    # load helper functions for each worker
-    clusterEvalQ(cl, {
-            file_sim_data <- paste0(wd, "/fun/sim_data.R")
-            source(file_sim_data)
-            file_mean_level <- paste0(wd, "/fun/mean_level.R")
-            source(file_mean_level)
-            file_get_vars <- paste0(wd, "/fun/get_vars_from_icc.R")
-            source(file_get_vars)
+cl <- makeCluster(n_cores)
+# load libraries to workers
+clusterEvalQ(cl, {
+        library(dplyr)
+        library(data.table)
+        library(lme4)
+        library(pROC)
         })
+# set working dir for each worker
+clusterExport(cl, "wd")
+wd <- getwd()
+# load helper functions for each worker
+clusterEvalQ(cl, {
+        file_sim_data <- paste0(wd, "/fun/sim_data.R")
+        source(file_sim_data)
+        file_mean_level <- paste0(wd, "/fun/mean_level.R")
+        source(file_mean_level)
+        file_get_vars <- paste0(wd, "/fun/get_vars_from_icc.R")
+        source(file_get_vars)
+    })
 
-    #simulate data
-    sim_results <- clusterMap(cl, sim_data,
-    N = mini_params[["N"]],
-    sample_size = mini_params[["sample_sizes"]],
-    pred_ICC = mini_params[["pred_ICCs"]],
-    gtm_beta = mini_params[["gtm_betas"]],
-    SA_incidence_day = mini_params[["SA_incidences_days"]],    
+# %% RUN PARELLELIZED
+sim_results <- clusterMap(cl, sim_data,
+    N = params[["N"]],
+    sample_size = params[["sample_sizes"]],
+    pred_ICC = params[["pred_ICCs"]],
+    gtm_beta = params[["gtm_betas"]],
+    SA_incidence_day = params[["SA_incidences_days"]],    
     RECYCLE = FALSE,
     SIMPLIFY = FALSE, 
     USE.NAMES = TRUE)
-    
-    stopCluster(cl)
 
-    # save data to csv
-    sim_results_df <- do.call("rbind", sim_results)
-    results_file <- sprintf("results%04d.csv", i)
-    write.csv(sim_results_df, paste0(wd,"/", dir_name, "/", results_file))
-}
+stopCluster(cl)
+
+# save data to csv
+sim_results_df <- do.call("rbind", sim_results)
+results_file <- sprintf("results%04d.csv", i)
+write.csv(sim_results_df, paste0(dir_name, "/", results_file))
 
