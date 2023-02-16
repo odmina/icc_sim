@@ -28,6 +28,7 @@ names(params) <- c("N",
     "noise_ICCs",
     "gtm_betas",
     "SA_incidences_days")
+mini_params <- params[1:8, ]
 
 # %% SET UP CLUSTER
 n_cores <- detectCores()
@@ -40,8 +41,8 @@ clusterEvalQ(cl, {
         library(pROC)
         })
 # set working dir for each worker
-clusterExport(cl, "wd")
 wd <- getwd()
+clusterExport(cl, "wd")
 # load helper functions for each worker
 clusterEvalQ(cl, {
         file_sim_data <- paste0(wd, "/fun/sim_data.R")
@@ -53,20 +54,24 @@ clusterEvalQ(cl, {
     })
 
 # %% RUN PARELLELIZED
-sim_results <- clusterMap(cl, sim_data,
-    N = params[["N"]],
-    sample_size = params[["sample_sizes"]],
-    pred_ICC = params[["pred_ICCs"]],
-    gtm_beta = params[["gtm_betas"]],
-    SA_incidence_day = params[["SA_incidences_days"]],    
-    RECYCLE = FALSE,
-    SIMPLIFY = FALSE, 
-    USE.NAMES = TRUE)
+runs <- 100
+for (i in seq_len(runs)) {
+    sim_results <- clusterMap(cl, sim_data,
+        N = mini_params[["N"]],
+        sample_size = mini_params[["sample_sizes"]],
+        pred_ICC = mini_params[["pred_ICCs"]],
+        gtm_beta = mini_params[["gtm_betas"]],
+        SA_incidence_day = mini_params[["SA_incidences_days"]],    
+        RECYCLE = FALSE,
+        SIMPLIFY = FALSE, 
+        USE.NAMES = TRUE)
+    # save data to csv
+    sim_results_df <- do.call("rbind", sim_results)
+    results_file <- sprintf("results%04d.csv", i)
+    write.csv(sim_results_df, paste0(dir_name, "/", results_file))
+}
+
 
 stopCluster(cl)
 
-# save data to csv
-sim_results_df <- do.call("rbind", sim_results)
-results_file <- sprintf("results%04d.csv", i)
-write.csv(sim_results_df, paste0(dir_name, "/", results_file))
 
