@@ -28,7 +28,7 @@ names(params) <- c("N",
     "noise_ICCs",
     "gtm_betas",
     "SA_incidences_days")
-mini_params <- params[1:8, ]
+#mini_params <- params[1:8, ]
 
 # %% SET UP CLUSTER
 n_cores <- detectCores()
@@ -69,8 +69,9 @@ for (i in seq_len(runs)) {
     sim_results_df <- do.call("rbind", sim_results)
     results_file <- sprintf("results%04d.csv", i)
     write.csv(sim_results_df, paste0(dir_name, "/", results_file))
+    rm(sim_results_df)
+    rm(sim_results)
 }
-
 
 stopCluster(cl)
 
