@@ -2,7 +2,7 @@
 
 toy_example.r
 *.Rproj
-sim_results_*
+sim_results_2023*
 
 # Created by https://www.toptal.com/developers/gitignore/api/macos,sublimetext,r,python
 # Edit at https://www.toptal.com/developers/gitignore?templates=macos,sublimetext,r,python
