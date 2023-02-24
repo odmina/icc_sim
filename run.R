@@ -1,7 +1,7 @@
 # %% LIBRARIES
 library(parallel)
 
-source("fun/sim_data.R")
+source("functions/sim_data.R")
 
 # %% CREATE A DIRECTORY TO STORE SIMULATION RESULTS
 dir_name <- paste0("sim_results_", Sys.Date(), "_", format(Sys.time(), "%H%M%S"))
@@ -45,11 +45,11 @@ wd <- getwd()
 clusterExport(cl, "wd")
 # load helper functions for each worker
 clusterEvalQ(cl, {
-        file_sim_data <- paste0(wd, "/fun/sim_data.R")
+        file_sim_data <- paste0(wd, "/functions/sim_data.R")
         source(file_sim_data)
-        file_mean_level <- paste0(wd, "/fun/mean_level.R")
+        file_mean_level <- paste0(wd, "/functions/mean_level.R")
         source(file_mean_level)
-        file_get_vars <- paste0(wd, "/fun/get_vars_from_icc.R")
+        file_get_vars <- paste0(wd, "/functions/get_vars_from_icc.R")
         source(file_get_vars)
     })
 
