@@ -24,6 +24,7 @@ Code used to produce figures can be found in `analyze_data.R`.
 - `m_lin_7` generalized linear, **7** averaged measurements used as a predictor of suicide attempt at any of 30 time points 
 - `m_lin_1` generalized linear, **1** measurement used as a predictor of suicide attempt at any of 30 time points 
 
+![](figures/icc_type_n.png)
 
 ## References
 
